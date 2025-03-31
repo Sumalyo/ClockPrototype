@@ -1,0 +1,17 @@
+{
+    "name": "minimalist-clock-app",
+    "version": "1.0.0",
+    "description": "Minimalist clock app with dynamic background and weather using OpenAI and openweather-api-node",
+    "main": "app.js",
+    "scripts": {
+      "start": "node app.js"
+    },
+    "dependencies": {
+      "dotenv": "^16.0.3",
+      "ejs": "^3.1.8",
+      "express": "^4.18.2",
+      "openai": "^4.14.0",
+      "openweather-api-node": "^1.0.2"
+    }
+  }
+  

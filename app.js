@@ -154,7 +154,10 @@ refreshData(true);
 
 app.get('/', async (req, res) => {
   console.log("GET / request received");
-  if (!currentBackgroundFile || !currentWeatherInfo) await refreshData(true);
+  if (!currentBackgroundFile || !currentWeatherInfo || currentBackgroundFile === DEFAULT_IMAGE) {
+    console.log("Initial background is default, triggering forced refresh...");
+    await refreshData(true);
+  }
   res.render('index', {
     backgroundUrl: '/' + currentBackgroundFile,
     weather: currentWeatherInfo

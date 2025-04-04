@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Minimalist Clock with Weather & Background</title>
@@ -35,15 +36,21 @@
       backdrop-filter: blur(10px);
       box-shadow: 0 8px 24px rgba(0,0,0,0.3);
       transition: background 0.5s ease-in-out;
+      min-width: 50%;
+      min-height: 30%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
     }
 
     .clock {
-      font-size: 4em;
+      font-size: 5em;
       font-weight: bold;
     }
 
     .date {
-      font-size: 1.2em;
+      font-size: 1.4em;
       margin-top: 10px;
     }
 
@@ -72,14 +79,64 @@
   </div>
 
   <script>
-    function updateClock() {
+    // function updateClock() {
+      const offsetMinutes = parseInt('<%= utcOffset %>', 10);
       const clockEl = document.getElementById('clock');
-      const now = new Date();
-      const hours = now.getHours().toString().padStart(2, '0');
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      const seconds = now.getSeconds().toString().padStart(2, '0');
+      const nowUTC = new Date();
+      //console.log(nowUTC.getTime())
+      //const local = new Date(nowUTC.getTime() + offsetMinutes * 60000);
+      const local = new Date(Date.UTC(
+        nowUTC.getUTCFullYear(),
+        nowUTC.getUTCMonth(),
+        nowUTC.getUTCDate(),
+        nowUTC.getUTCHours(),
+        nowUTC.getUTCMinutes() + offsetMinutes,
+        nowUTC.getUTCSeconds()
+      ));
+      const hours = local.getHours().toString().padStart(2, '0');
+      const minutes = local.getMinutes().toString().padStart(2, '0');
+      const seconds = local.getSeconds().toString().padStart(2, '0');
+      clockEl.textContent = `${hours}:${minutes}:${seconds}`;
+      // console.log({'Clock Debug', {
+      //   nowUTC: nowUTC.toISOString(),
+      //   offsetMinutes,
+      //   localTime: local.toISOString()
+      // }});
+    //       })
+    //       .catch(() => {
+    //         clockEl.textContent = now.toLocaleTimeString();
+    //       });
+    //   } catch (err) {
+    //     console.error('Error fetching local time:', err);
+    //     clockEl.textContent = now.toLocaleTimeString();
+    //   }
+    // }
+    
+
+    function updateClock() {
+      const offsetMinutes = parseInt('<%= utcOffset %>', 10);
+      const clockEl = document.getElementById('clock');
+      const nowUTC = new Date();
+      //const local = new Date(nowUTC.getTime() + offsetMinutes * 60000);
+      const local = new Date(Date.UTC(
+        nowUTC.getUTCFullYear(),
+        nowUTC.getUTCMonth(),
+        nowUTC.getUTCDate(),
+        nowUTC.getUTCHours(),
+        nowUTC.getUTCMinutes() + offsetMinutes,
+        nowUTC.getUTCSeconds()
+      ));
+      //console.log(offsetMinutes)
+      //console.log(nowUTC.getTime())
+      //console.log(nowUTC.getTime() + offsetMinutes * 60000)
+      //console.log(nowUTC.getTime())
+      
+      const hours = local.getHours().toString().padStart(2, '0');
+      const minutes = local.getMinutes().toString().padStart(2, '0');
+      const seconds = local.getSeconds().toString().padStart(2, '0');
       clockEl.textContent = `${hours}:${minutes}:${seconds}`;
     }
+
     setInterval(updateClock, 1000);
     updateClock();
 
@@ -91,6 +148,7 @@
       });
       dateEl.textContent = dateStr;
     }
+
     updateDate();
 
     function refreshContent() {

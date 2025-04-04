@@ -80,6 +80,7 @@ async function getBackgroundImage(prompt) {
     const filename = `bg_${Date.now()}.png`;
     await downloadImage(imageUrl, filename);
     return filename;
+    //return DEFAULT_IMAGE;
   } catch (error) {
     console.error("Image generation error:", error);
     return DEFAULT_IMAGE;
@@ -158,18 +159,40 @@ app.get('/', async (req, res) => {
     console.log("Initial background is default, triggering forced refresh...");
     await refreshData(true);
   }
+  const moment = require('moment-timezone');
+  const timezoneData = await readJson(path.join(__dirname, 'timezones.json'));
+  const timezone = timezoneData[currentWeatherInfo.city] || 'Etc/UTC';
+  //console.log(timezone)
+  const offsetMinutes = moment.tz(timezone).utcOffset();
+  const offsetMinutesoperator = moment.tz('Asia/Kolkata').utcOffset();
+  const offsetMinutesRelative = offsetMinutes-offsetMinutesoperator
+  //console.log()
+
   res.render('index', {
     backgroundUrl: '/' + currentBackgroundFile,
-    weather: currentWeatherInfo
+    weather: currentWeatherInfo,
+    utcOffset: offsetMinutesRelative
   });
+});
+
+app.get('/settings.json', async (req, res) => {
+  res.sendFile(path.join(__dirname, 'settings.json'));
 });
 
 app.post('/refresh', async (req, res) => {
   console.log("POST /refresh request received");
   await refreshData(true);
+  const moment = require('moment-timezone');
+  const timezoneData = await readJson(path.join(__dirname, 'timezones.json'));
+  const timezone = timezoneData[currentWeatherInfo.city] || 'Etc/UTC';
+  const offsetMinutes = moment.tz(timezone).utcOffset();
+  const offsetMinutesoperator = moment.tz('Asia/Kolkata').utcOffset();
+  const offsetMinutesRelative = offsetMinutes-offsetMinutesoperator
+  console.log(offsetMinutesRelative)
   res.json({
     background_url: '/' + currentBackgroundFile,
-    weather: currentWeatherInfo
+    weather: currentWeatherInfo,
+    utcOffset: offsetMinutesRelative // Not a true world clock as this effect does not take effect
   });
 });
 

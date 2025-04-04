@@ -1,141 +1,174 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const CITY = process.env.CITY || 'New York';
-
-const OpenAI =  require('openai');
-const client = new OpenAI({
-  apiKey: process.env['OPENAI_API_KEY'], // This is the default and can be omitted
-});
-const openai = new OpenAI();
-
-
-
-// OpenWeather setup using openweather-api-node
-const OpenWeather = require('openweather-api-node');
-const openWeather = new OpenWeather({
-  key: 'a8f32947205d2c0168e3a98b7457b771',
-  units: 'metric',
-  locationName: CITY,
-});
+const fs = require('fs/promises');
+const fetch = require('node-fetch');
+const { createWriteStream } = require('fs');
+const OpenAI = require('openai');
+const openai = new OpenAI({ apiKey: process.env['OPENAI_API_KEY'] });
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('backgrounds'));
 
-// Set EJS as the templating engine and define the views folder
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+const BACKGROUND_FOLDER = path.join(__dirname, 'backgrounds');
+const DEFAULT_IMAGE = 'default.png';
+const SETTINGS_PATH = path.join(__dirname, 'settings.json');
+const DATABASE_PATH = path.join(__dirname, 'database.json');
+// const CITY = 'Kolkata'; // Removed hardcoded city
+const OPENWEATHER_API_KEY = process.env['WEATHER_API_KEY'];
 
-
-// Global variables to store current background image and weather info
-let currentBackgroundUrl = null;
+let currentBackgroundFile = DEFAULT_IMAGE;
 let currentWeatherInfo = null;
 
-// Function to get a background image using the OpenAI DALL‑E API
-async function getBackgroundImage(prompt = "a scene of the city of Kolkata on a cloudy night with a dry climate in summer. Generate this with a Ghibli style aesthetic") {
-  
-//const response = await openai.responses.create({
-//   model: "gpt-4o",
-//   input: "Write a one-sentence bedtime story about a unicorn."
-// });
+function generatePrompt(settings, database) {
+  const prompt = `A ${settings["Picture Style"].toLowerCase()} style image of ${database.city} in the ${database.timeOfDay.toLowerCase()} on a ${database.Weather.toLowerCase()} day.`;
+  console.log("Generated prompt:", prompt);
+  return prompt;
+}
 
-// console.log(response.output_text);
+async function readJson(filePath) {
   try {
-    // const response = await openai.images.generate({
-    //   model: "dall-e-3",
-    //   prompt: prompt,
-    //   size: "1024x1024"
-    // });
-    // if (response.data.data && response.data.data.length > 0) {
-    //   return response.data.data[0].url;
-    // } else {
-    //   console.error("Error generating image:", response.data);
-    //   return null;
-    // }
-  return 'https://oaidalleapiprodscus.blob.core.windows.net/private/org-aYev2ALdXUsrBNqHLCD5wtZ0/user-tSuxbLUEOpJDGzxwKqrWo4mE/img-98WGDvfqUGm8xAmbrFXjUUnk.png?st=2025-03-31T06%3A24%3A17Z&se=2025-03-31T08%3A24%3A17Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=d505667d-d6c1-4a0a-bac7-5c84a87759f8&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-03-31T03%3A58%3A40Z&ske=2025-04-01T03%3A58%3A40Z&sks=b&skv=2024-08-04&sig=%2BRGkPkIv3WBs3i/UOSw3dhHRePWi7zd3RxcNbW9/S9Y%3D'
-  } 
-  catch (error) {
-    console.error("Error in getBackgroundImage:", error);
-    return null;
+    const data = await fs.readFile(filePath, 'utf-8');
+    console.log(`Read JSON from ${filePath}`);
+    return JSON.parse(data);
+  } catch (e) {
+    console.error(`Error reading ${filePath}:`, e);
+    return {};
   }
 }
 
-// // Function to get weather info using openweather-api-node
-// async function getWeather(city = CITY) {
-//   try {
-//     let data = await openWeather.getCurrent()
-//       // Current temperature is defined in weatherModel.weather.temp.cur
-//       // If you are not sure what is weather model check it out in docs
-//       console.log("Current temperature in" +city+ ` is: ${data.weather.temp.cur}\u00B0F`)
-// return {
-//   temp: data.weather.temp.cur,
-//   description: data.weather.description,
-//   city: city
-// };
-
-//     // openWeather.getCurrentWeather returns a promise
-//     //const weatherData = await openWeather.getCurrentWeather({ city: city });
-    
-//   } catch (error) {
-//     console.error("Error in getWeather:", error);
-//     return null;
-//   }
-// }
-async function getWeather(city = CITY) {
+async function writeJson(filePath, data) {
   try {
-    const url = `http://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=a8f32947205d2c0168e3a98b7457b771&units=metric`;
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+    console.log(`Wrote JSON to ${filePath}`);
+  } catch (e) {
+    console.error(`Error writing ${filePath}:`, e);
+  }
+}
+
+async function downloadImage(url, filename) {
+  const filePath = path.join(BACKGROUND_FOLDER, filename);
+  console.log(`Downloading image to ${filePath} from ${url}`);
+  const res = await fetch(url);
+  const stream = createWriteStream(filePath);
+  return new Promise((resolve, reject) => {
+    res.body.pipe(stream);
+    res.body.on('error', reject);
+    stream.on('finish', () => {
+      console.log(`Image download completed: ${filename}`);
+      resolve(filename);
+    });
+  });
+}
+
+async function getBackgroundImage(prompt) {
+  try {
+    console.log("Requesting image generation from OpenAI...");
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt,
+      size: "1792x1024"
+    });
+
+    const imageUrl = response.data[0].url;
+    console.log("Image URL received:", imageUrl);
+    const filename = `bg_${Date.now()}.png`;
+    await downloadImage(imageUrl, filename);
+    return filename;
+  } catch (error) {
+    console.error("Image generation error:", error);
+    return DEFAULT_IMAGE;
+  }
+}
+
+async function getWeather(city) {
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${OPENWEATHER_API_KEY}&units=metric`;
+    console.log("Fetching weather from OpenWeather API for:", city);
     const response = await fetch(url);
     const data = await response.json();
     if (response.ok) {
+      console.log("Weather data received:", data);
       return {
         temp: data.main.temp,
-        description: data.weather[0].description.charAt(0).toUpperCase() + data.weather[0].description.slice(1),
-        city: city
+        description: data.weather[0].description,
+        city: city,
+        weatherMain: data.weather[0].main
       };
-    } else {
-      console.error("Weather API error:", data);
-      return null;
     }
+    console.error("Weather API response not ok:", data);
+    return null;
   } catch (error) {
-    console.error("Error in getWeather:", error);
+    console.error("Weather error:", error);
     return null;
   }
 }
 
-// Function to refresh both the background image and weather data
-async function refreshData() {
-  currentBackgroundUrl = await getBackgroundImage();
-  currentWeatherInfo = await getWeather();
+async function refreshData(forceImage = false) {
+  console.log("\nRefreshing data...");
+  const settings = await readJson(SETTINGS_PATH);
+  const database = await readJson(DATABASE_PATH);
+  const weather = await getWeather(settings.location);
+
+  if (weather) {
+    currentWeatherInfo = {
+      temp: weather.temp,
+      description: weather.description.charAt(0).toUpperCase() + weather.description.slice(1),
+      city: weather.city
+    };
+
+    const now = new Date();
+    const hours = now.getHours();
+    database.timeOfDay = hours >= 5 && hours < 18 ? 'Day' : 'Night';
+    database.Weather = weather.weatherMain;
+    database.city = settings.location;
+    database["Date of recording"] = now.toLocaleDateString();
+
+    await writeJson(DATABASE_PATH, database);
+
+    const currentHour = now.getHours();
+    if (forceImage || [0, 6, 12, 18].includes(currentHour)) {
+      console.log("Generating new background image...");
+      const prompt = generatePrompt(settings, database);
+      const newImage = await getBackgroundImage(prompt);
+      currentBackgroundFile = newImage;
+    } else {
+      console.log("No image generation required at this time.");
+    }
+  } else {
+    console.log("Weather data unavailable, skipping image generation.");
+  }
 }
 
-// Initial data fetch on server start
-refreshData();
+setInterval(() => {
+  console.log("\nScheduled refresh triggered.");
+  refreshData(false);
+}, 1.5 * 60 * 60 * 1000);
 
-// Route for the main page
+refreshData(true);
+
 app.get('/', async (req, res) => {
-  // Ensure data is available before rendering
-  if (!currentBackgroundUrl || !currentWeatherInfo) {
-    await refreshData();
-  }
+  console.log("GET / request received");
+  if (!currentBackgroundFile || !currentWeatherInfo) await refreshData(true);
   res.render('index', {
-    backgroundUrl: currentBackgroundUrl,
+    backgroundUrl: '/' + currentBackgroundFile,
     weather: currentWeatherInfo
   });
 });
 
-// Refresh endpoint to update the background image and weather data
 app.post('/refresh', async (req, res) => {
-  await refreshData();
+  console.log("POST /refresh request received");
+  await refreshData(true);
   res.json({
-    background_url: currentBackgroundUrl,
+    background_url: '/' + currentBackgroundFile,
     weather: currentWeatherInfo
   });
 });
 
-// Start the server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

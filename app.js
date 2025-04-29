@@ -6,6 +6,7 @@ const fetch = require('node-fetch');
 const { createWriteStream } = require('fs');
 const OpenAI = require('openai');
 const openai = new OpenAI({ apiKey: process.env['OPENAI_API_KEY'] });
+//const fs = require("fs").promises;
 
 const app = express();
 app.use(express.json());
@@ -51,34 +52,44 @@ async function writeJson(filePath, data) {
   }
 }
 
-async function downloadImage(url, filename) {
+async function downloadImage(imageBase64, filename) {
   const filePath = path.join(BACKGROUND_FOLDER, filename);
-  console.log(`Downloading image to ${filePath} from ${url}`);
-  const res = await fetch(url);
-  const stream = createWriteStream(filePath);
-  return new Promise((resolve, reject) => {
-    res.body.pipe(stream);
-    res.body.on('error', reject);
-    stream.on('finish', () => {
-      console.log(`Image download completed: ${filename}`);
-      resolve(filename);
-    });
-  });
+  //console.log(`Downloading image to ${filePath} from ${url}`);
+  console.log("Decodding image")
+  //const res = await fetch(url);
+  const buffer = Buffer.from(imageBase64, "base64");
+  await fs.writeFile(filePath, buffer);
+  console.log(`✅ Image saved: ${filePath}`);
+  return filePath;
+  //const stream = createWriteStream(filePath);
+
+  // return new Promise((resolve, reject) => {
+  //   res.body.pipe(stream);
+  //   res.body.on('error', reject);
+  //   stream.on('finish', () => {
+  //     console.log(`Image download completed: ${filename}`);
+  //     resolve(filename);
+  //   });
+  // });
 }
 
 async function getBackgroundImage(prompt) {
   try {
     console.log("Requesting image generation from OpenAI...");
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1", // set the image model accordingly
       prompt,
-      size: "1792x1024"
-    });
+      quality:"low",
+      size: "1536x1024" // update the size
+    }); // update this to latest API
 
-    const imageUrl = response.data[0].url;
-    console.log("Image URL received:", imageUrl);
+    // const imageUrl = response.data[0].url;
+    // console.log("Image URL received:", imageUrl);
+    //console.log(response.data)
+    const imageBase64 = response.data[0].b64_json;
+    console.log("Image base 64 recieved");
     const filename = `bg_${Date.now()}.png`;
-    await downloadImage(imageUrl, filename);
+    await downloadImage(imageBase64, filename);
     return filename;
     //return DEFAULT_IMAGE;
   } catch (error) {
@@ -109,8 +120,10 @@ async function getWeather(city) {
     return null;
   }
 }
+// modify with weather codes
 
 async function refreshData(forceImage = false) {
+  // improve prompt generation with weather code and more exciting settings
   console.log("\nRefreshing data...");
   const settings = await readJson(SETTINGS_PATH);
   const database = await readJson(DATABASE_PATH);
